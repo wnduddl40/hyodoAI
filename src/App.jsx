@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 /* ─── 색상 토큰 ─────────────────────────────── */
 const C = {
@@ -113,11 +113,8 @@ function ListenScreen({ phrase, onDone, grad }) {
 function ProcScreen({ steps, icons, onDone, onBack }) {
   const [vis, setVis] = useState(1);
   useEffect(() => {
-    const tids = [];
-    steps.slice(1).forEach((_,i)=> tids.push(setTimeout(()=>setVis(i+2),(i+1)*750)));
-    const doneTid = setTimeout(onDone, steps.length * 750 + 400);
-    tids.push(doneTid);
-    return () => tids.forEach(clearTimeout);
+    steps.slice(1).forEach((_,i)=>setTimeout(()=>setVis(i+2),(i+1)*750));
+    setTimeout(onDone, steps.length * 750 + 400);
   }, []);
   return (
     <Shell bg="#0f2027">
@@ -211,96 +208,28 @@ function DoneScreen({ title, sub, cardTitle, cardSub, cardBadge, badgeColor, onR
    🚂 기차 플로우
 ══════════════════════════════════════════════ */
 function TrainConfirm({ onApprove, onRetry, onBack }) {
-  const [stage, setStage] = useState('idle'); // idle, analyzing, fetching, ready
-  const [status, setStatus] = useState("");
-  const [trainData, setTrainData] = useState(null);
-
-  // 시뮬레이션용 API 데이터
-  const mockApiResult = {
-    trainNo: "KTX-산천 121",
-    departure: "서울 (11:30)",
-    arrival: "부산 (14:15)",
-    seat: "일반실 8호차 12C (창가)",
-    price: "59,800원"
-  };
-
-  const startSimulation = async () => {
-    // 1단계: LLM 의도 분석 시뮬레이션
-    setStage('analyzing');
-    setStatus("AI가 요청 내용을 분석하고 있습니다...");
-    await new Promise(res => setTimeout(res, 1500));
-
-    // 2단계: 공공데이터 API 호출 시뮬레이션
-    setStage('fetching');
-    setStatus("국토교통부 열차정보 API 연결 중...");
-    await new Promise(res => setTimeout(res, 1500));
-
-    // 3단계: 데이터 수신 완료
-    setTrainData(mockApiResult);
-    setStage('ready');
-  };
-
-  // 컴포넌트가 뜨자마자 시뮬레이션 시작
-  useEffect(() => {
-    startSimulation();
-  }, []);
-
   return (
     <Shell>
       <Bar onBack={onBack} grad={`linear-gradient(135deg,#1565C0,#0D47A1)`}/>
-
-      <div style={{flex:1, padding:"20px 16px", display:"flex", flexDirection:"column", position: "relative", background: "#f8f9fa"}}>
-
-        {/* API 통신 로딩 레이어 */}
-        {(stage === 'analyzing' || stage === 'fetching') && (
-          <div style={{display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", flex:1, gap:20}}>
-            <div className="spinner" style={{width:50, height:50, border:"5px solid #E3F2FD", borderTopColor:C.blue, borderRadius:"50%", animation:"sp 1s linear infinite"}} />
-            <div style={{textAlign:"center"}}>
-              <div style={{fontSize:18, fontWeight:800, color:C.blue, marginBottom:8}}>{status}</div>
-              <div style={{fontSize:13, color:C.gray}}>전국 열차 데이터를 실시간으로 조회하고 있습니다.</div>
+      <div style={{flex:1,padding:"20px 16px",display:"flex",flexDirection:"column",gap:14,overflow:"auto"}}>
+        <Bubble>
+          어머님, 일요일 부산행<br/>
+          <span style={{color:C.blue}}>KTX 11시 30분 좌석</span>이<br/>하나 있습니다. 예매할까요?
+        </Bubble>
+        <div style={{background:"white",borderRadius:18,padding:"15px 17px",boxShadow:"0 4px 14px rgba(0,0,0,0.05)"}}>
+          {[["🚂 출발","서울 → 부산"],["🕐 시간","일요일 11:30 출발"],["💺 좌석","일반실 창가 (31A)"],["💰 금액","25,000원"]].map(([l,v])=>(
+            <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid #F5F5F5"}}>
+              <span style={{color:C.gray,fontSize:14}}>{l}</span>
+              <span style={{fontWeight:800,fontSize:14,color:l.includes("💰")?C.blue:C.dark}}>{v}</span>
             </div>
-            {/* 시스템 로그처럼 보이는 디자인 (트랙2 강조용) */}
-            <div style={{background:C.dark, color:"#4AF626", padding:"12px", borderRadius:10, fontSize:10, width:"90%", fontFamily:"monospace", opacity:0.8}}>
-              {stage === 'analyzing' ? "> Extracting Entities... [OK]\n> Destination: BUSAN\n> Time: 11:30" : "> Fetching OpenData API...\n> GET /getRestTrainList/v1.0 HTTP/1.1\n> Connection: Established"}
-            </div>
-          </div>
-        )}
-
-        {/* 결과 화면 (API 통신 완료 후) */}
-        {stage === 'ready' && trainData && (
-          <div style={{display:"flex", flexDirection:"column", gap:14, animation: "fadeIn 0.5s"}}>
-            <Bubble>
-              어머님, 말씀하신 대로<br/>
-              <span style={{color:C.blue}}>{trainData.departure} 부산행</span><br/>좌석을 찾았습니다! 예매할까요?
-            </Bubble>
-
-            <div style={{background:"white", borderRadius:22, padding:"20px", boxShadow:"0 10px 25px rgba(0,0,0,0.08)", border:"1.5px solid #E3F2FD"}}>
-              <div style={{fontSize:12, fontWeight:800, color:C.blue, marginBottom:10, display:"flex", alignItems:"center", gap:5}}>
-                <span style={{width:8, height:8, borderRadius:"50%", background:C.blue}}/> 실시간 API 데이터 연동됨
-              </div>
-              {[
-                ["🚂 열차종류", trainData.trainNo],
-                ["🕑 출발시간", trainData.departure],
-                ["🏁 도착예정", trainData.arrival],
-                ["💺 좌석정보", trainData.seat],
-                ["💰 티켓요금", trainData.price]
-              ].map(([l, v]) => (
-                <div key={l} style={{display:"flex", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid #F0F2F5"}}>
-                  <span style={{color:C.gray, fontSize:14}}>{l}</span>
-                  <span style={{fontWeight:800, fontSize:14, color:C.dark}}>{v}</span>
-                </div>
-              ))}
-            </div>
-
-            <Btn onClick={onApprove} c={C.blue} c2={C.b2}>네, 이 표로 예매해줘 ✓</Btn>
-            <GBtn onClick={onRetry}>다른 시간표 다시보기</GBtn>
-          </div>
-        )}
+          ))}
+        </div>
+        <Btn onClick={onApprove} c={C.blue} c2={C.b2}>네, 예매해줘 ✓</Btn>
+        <GBtn onClick={onRetry}>아니, 다른 시간 찾아줘</GBtn>
+        <div style={{background:"#E3F2FD",border:"1.5px solid #90CAF9",borderRadius:13,padding:"12px 14px",fontSize:13,color:"#1565C0",lineHeight:1.6}}>
+          💳 따님 카드로 결제됩니다. 승인이 필요해요.
+        </div>
       </div>
-      <style>{`
-        @keyframes sp{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-        @keyframes fadeIn{from{opacity:0; transform:translateY(10px)}to{opacity:1; transform:translateY(0)}}
-      `}</style>
     </Shell>
   );
 }
@@ -308,105 +237,28 @@ function TrainConfirm({ onApprove, onRetry, onBack }) {
 /* ══════════════════════════════════════════════
    🏥 병원예약 플로우
 ══════════════════════════════════════════════ */
-function HospReservation({ onApprove, onBack }) {
-  const [stage, setStage] = useState('idle'); // idle -> analyzing -> selecting -> confirmed
-  const [analysis, setAnalysis] = useState(null);
-  const [selectedTime, setSelectedTime] = useState("");
-
-  const startAnalysis = async () => {
-    setStage('analyzing');
-    await new Promise(res => setTimeout(res, 2000));
-    setAnalysis({
-      hospital: "서울중앙정형외과",
-      type: "정형외과",
-      date: "2026-02-23(월)",
-      location: "종로구"
-    });
-    setStage('selecting');
-  };
-
-  useEffect(() => {
-    startAnalysis();
-  }, []);
-
-  const timeSlots = ["09:30", "10:00", "11:30", "14:00", "15:30", "16:30"];
-
+function HospConfirm({ onApprove, onRetry, onBack }) {
   return (
     <Shell>
       <Bar onBack={onBack} grad={`linear-gradient(135deg,${C.purple},${C.pu2})`}/>
-      <div style={{ flex:1, display:"flex", flexDirection:"column", background:"#F8F9FA" }}>
-        {stage === 'analyzing' && (
-          <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:20 }}>
-            <div className="pulse-mic" style={{ fontSize:60, marginBottom:20 }}>🎙️</div>
-            <b style={{ fontSize:20, color:"#673AB7" }}>어머님 말씀을 분석하고 있어요</b>
-            <p style={{ color:"#666", textAlign:"center" }}>"내일 오전 서울중앙정형외과 예약해줘"</p>
-            <div style={{ width:'100%', background:'#222', color:'#0F0', padding:15, borderRadius:10, fontSize:11, marginTop:30, fontFamily:'monospace' }}>
-              {"> Processing STT..."}<br/>
-              {"> NLP Entity Extraction: [Hospital: Seoul Central] [Dept: Orthopedics]"}<br/>
-              {"> Calling HIRA_Hosp_Info_API..."}
+      <div style={{flex:1,padding:"20px 16px",display:"flex",flexDirection:"column",gap:14,overflow:"auto"}}>
+        <Bubble style={{borderColor:"#E1BEE7"}}>
+          어머님, 가까운 정형외과를<br/>찾았어요! 내일 오전에<br/>
+          <span style={{color:C.purple}}>10시 30분 예약</span>이 가능합니다.<br/>예약할까요?
+        </Bubble>
+        <div style={{background:"white",borderRadius:18,padding:"15px 17px",boxShadow:"0 4px 14px rgba(0,0,0,0.05)"}}>
+          {[["🏥 병원","서울 정형외과의원"],["📍 위치","도보 3분 · ⭐ 4.8"],["📅 일시","내일 오전 10:30"],["👨‍⚕️ 진료","정형외과 (무릎·관절)"],["💰 진료비","3,000원 (본인부담)"]].map(([l,v])=>(
+            <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid #F5F5F5"}}>
+              <span style={{color:C.gray,fontSize:14}}>{l}</span>
+              <span style={{fontWeight:800,fontSize:14,color:l.includes("💰")?C.purple:C.dark}}>{v}</span>
             </div>
-          </div>
-        )}
-
-        {stage === 'selecting' && (
-          <div style={{ padding:20, animation:"fadeIn 0.5s" }}>
-            <div style={{ background:"white", padding:20, borderRadius:20, border:"2px solid #673AB7", marginBottom:20 }}>
-              <span style={{ background:"#673AB7", color:"white", padding:"4px 8px", borderRadius:8, fontSize:12 }}>확인된 정보</span>
-              <h2 style={{ margin:"10px 0 5px 0" }}>{analysis.hospital}</h2>
-              <p style={{ margin:0, color:"#666" }}>📅 {analysis.date}</p>
-            </div>
-
-            <p style={{ fontWeight:800, fontSize:18, marginBottom:15 }}>몇 시에 방문하시겠어요?</p>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
-              {timeSlots.map(time => (
-                <button
-                  key={time}
-                  onClick={() => { setSelectedTime(time); setStage('confirmed'); }}
-                  style={{
-                    padding:"15px 10px", borderRadius:12, border:"1px solid #DDD",
-                    background:"white", fontSize:15, fontWeight:700, cursor:"pointer"
-                  }}
-                >
-                  {time}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {stage === 'confirmed' && (
-          <div style={{ padding:20, animation:"fadeIn 0.5s" }}>
-            <div style={{ textAlign:"center", padding:"40px 0" }}>
-              <div style={{ fontSize:50 }}>✅</div>
-              <h2 style={{ marginBottom:5 }}>예약 준비 완료!</h2>
-              <p style={{ color:"#666" }}>선택하신 시간이 맞는지 확인해 주세요.</p>
-            </div>
-
-            <div style={{ background:"white", padding:25, borderRadius:24, boxShadow:"0 10px 20px rgba(0,0,0,0.05)", marginBottom:20 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
-                <span style={{ color:"#888" }}>병원명</span>
-                <b>{analysis.hospital}</b>
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
-                <span style={{ color:"#888" }}>예약일시</span>
-                <b style={{ color:"#673AB7" }}>{analysis.date} {selectedTime}</b>
-              </div>
-            </div>
-
-            <button
-              onClick={() => onApprove(analysis, selectedTime)}
-              style={{ width:"100%", padding:"20px", borderRadius:18, border:"none", background:"#673AB7", color:"white", fontSize:18, fontWeight:800, cursor:"pointer" }}
-            >
-              자녀에게 승인 요청하기
-            </button>
-          </div>
-        )}
-
-        <style>{`
-          @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-          .pulse-mic { animation: pulse 1.5s infinite; }
-          @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
-        `}</style>
+          ))}
+        </div>
+        <Btn onClick={onApprove} c={C.purple} c2={C.pu2}>네, 예약해줘 ✓</Btn>
+        <GBtn onClick={onRetry}>다른 병원 찾아줘</GBtn>
+        <div style={{background:"#F3E5F5",border:"1.5px solid #CE93D8",borderRadius:13,padding:"12px 14px",fontSize:13,color:"#6A1B9A",lineHeight:1.6}}>
+          📋 예약 후 따님께 알림이 전송됩니다.<br/>진료비는 현장에서 결제해 주세요.
+        </div>
       </div>
     </Shell>
   );
@@ -537,9 +389,9 @@ function AidConsult({ onYes, onNo, onBack }) {
         </div>
         <Bubble style={{borderColor:"#B2EBF2",fontSize:17,lineHeight:1.7}}>
           어머님, 걷기 힘드실 때 쓰는<br/>
-          <span style={{color:C.t2,fontWeight:900}}>실버카/지팡이/휠체어 등</span>을<br/>
-          국가보조금을 지원받아서<br/>
-          <span style={{color:C.primary,fontWeight:900}}>저렴하게</span> 준비해 드릴 수 있어요. 😊<br/><br/>
+          <span style={{color:C.t2,fontWeight:900}}>실버카 (보행보조기)</span>를<br/>
+          나라 지원받아서<br/>
+          <span style={{color:C.primary,fontWeight:900}}>1만 원대</span>에 준비해 드릴 수 있어요. 😊<br/><br/>
           자격이 되는지 확인해볼까요?
         </Bubble>
         <Btn onClick={onYes} c={C.blue} c2={C.b2} style={{fontSize:20}}>응, 확인해줘 👍</Btn>
@@ -778,14 +630,457 @@ function AidDone({ onReset }) {
 }
 
 /* ══════════════════════════════════════════════
+   🌸 마음 상담 화면  (Claude API + Web Speech)
+══════════════════════════════════════════════ */
+function HeartChat({ onBack }) {
+  const SYSTEM = `당신은 '지혜'라는 이름의 따뜻하고 공감 능력이 뛰어난 AI 말벗입니다.
+60~80대 시니어 어르신들의 감정적 토로, 외로움, 그날의 기분, 건강 걱정, 가족 이야기, 일상 등 모든 것을 들어드립니다.
+
+핵심 원칙:
+- 항상 존댓말로 자연스럽게 대화 (어머님/아버님 호칭 사용)
+- 조언이나 해결책보다 공감과 경청을 최우선으로
+- 어르신이 털어놓으시면 "그러셨군요, 많이 힘드셨겠어요" 처럼 먼저 충분히 받아드릴 것
+- 답변은 2~4문장으로 짧고 따뜻하게, 대화가 자연스럽게 이어지도록
+- 이모지 1~2개 사용 가능
+- 절대 판단하거나 설교하지 않음
+- 어르신이 슬프거나 외롭다고 하시면 그 감정을 충분히 인정해드릴 것
+- 마지막에 부드러운 질문으로 대화를 이어갈 것
+- 말투는 따뜻하고 친근하게`;
+
+  const MOODS = [
+    { label:"😊 좋아요",         color:"#27AE60", bg:"#E8F5E9", prompt:"오늘 기분이 좋아요!" },
+    { label:"😐 그냥 그래요",    color:"#F39C12", bg:"#FFF8E1", prompt:"오늘 기분이 그냥 그래요." },
+    { label:"😔 외로워요",       color:"#2979FF", bg:"#E3F2FD", prompt:"오늘 좀 외롭고 쓸쓸해요." },
+    { label:"😢 슬퍼요",         color:"#8E44AD", bg:"#F3E5F5", prompt:"오늘 마음이 슬프고 힘들어요." },
+    { label:"😤 답답해요",       color:"#E53935", bg:"#FFEBEE", prompt:"오늘 답답하고 짜증이 나요." },
+    { label:"😰 걱정돼요",       color:"#00BCD4", bg:"#E0F7FA", prompt:"오늘 걱정이 많아요." },
+    { label:"🤒 몸이 안 좋아요", color:"#FF6B35", bg:"#FFF3ED", prompt:"오늘 몸이 좀 안 좋아요." },
+    { label:"😄 신나요",         color:"#9C27B0", bg:"#F3E5F5", prompt:"오늘 기분이 신나고 설레요!" },
+  ];
+
+  const ROSE = "#E91E63"; const ROSE2 = "#C2185B";
+
+  const GREET = "안녕하세요 😊\n오늘 기분이 어떠세요?\n무슨 말이든 편하게 털어놓으세요.\n제가 여기서 들을게요.";
+
+  const [msgs,      setMsgs]      = useState([{ role:"ai", text: GREET }]);
+  const [listening, setListening] = useState(false);
+  const [speaking,  setSpeaking]  = useState(false);
+  const [loading,   setLoading]   = useState(false);
+  const [interim,   setInterim]   = useState("");
+  const [moodDone,  setMoodDone]  = useState(false);
+  const [errMsg,    setErrMsg]    = useState("");
+  const [msgCount,  setMsgCount]  = useState(0); // 사용자 발화 횟수
+
+  const recogRef  = useRef(null);
+  const synthRef  = useRef(null);
+  const scrollRef = useRef(null);
+  const histRef   = useRef([]);
+
+  /* synthRef 안전 초기화 */
+  useEffect(() => {
+    synthRef.current = typeof window !== "undefined" ? window.speechSynthesis : null;
+  }, []);
+
+  /* 스크롤 아래로 */
+  useEffect(() => {
+    if (scrollRef.current)
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [msgs, loading, interim]);
+
+  /* TTS */
+  const speak = useCallback((text) => {
+    const synth = synthRef.current;
+    if (!synth) return;
+    synth.cancel();
+    // 이모지 제거해서 TTS
+    const clean = text.replace(/[\u{1F300}-\u{1F9FF}]/gu, "").trim();
+    const u = new SpeechSynthesisUtterance(clean);
+    const voices = synth.getVoices();
+    const ko = voices.find(v => v.lang.startsWith("ko"))
+            || voices.find(v => v.lang.startsWith("ja"))
+            || voices[0];
+    if (ko) u.voice = ko;
+    u.lang  = "ko-KR";
+    u.rate  = 0.86;
+    u.pitch = 1.06;
+    u.volume = 1;
+    u.onstart = () => setSpeaking(true);
+    u.onend   = () => setSpeaking(false);
+    u.onerror = () => setSpeaking(false);
+    synth.speak(u);
+  }, []);
+
+  /* 첫 인사 TTS */
+  useEffect(() => {
+    const t = setTimeout(() => speak(GREET), 700);
+    return () => clearTimeout(t);
+  }, []);
+
+  /* Claude API */
+  const askClaude = useCallback(async (userText) => {
+    setLoading(true); setErrMsg("");
+    try {
+      histRef.current.push({ role:"user", content: userText });
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 350,
+          system: SYSTEM,
+          messages: histRef.current,
+        }),
+      });
+      const data = await res.json();
+      const reply = data.content?.[0]?.text
+        ?? "죄송해요, 잠시 연결이 안 됐어요. 다시 말씀해 주세요.";
+      histRef.current.push({ role:"assistant", content: reply });
+      return reply;
+    } catch {
+      return "잠깐 연결이 끊겼어요. 다시 한번 말씀해 주시겠어요? 🙏";
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const addAI = useCallback((text) => {
+    setMsgs(p => [...p, { role:"ai", text }]);
+    setTimeout(() => speak(text), 80);
+  }, [speak]);
+
+  /* 기분 버튼 */
+  const pickMood = useCallback(async (mood) => {
+    setMoodDone(true);
+    const userText = mood.prompt;
+    setMsgs(p => [...p, { role:"user", text: userText }]);
+    setMsgCount(c => c+1);
+    const reply = await askClaude(userText);
+    addAI(reply);
+  }, [askClaude, addAI]);
+
+  /* 주제 버튼 */
+  const pickTopic = useCallback(async (topic) => {
+    const userText = `${topic}에 대해 얘기하고 싶어요.`;
+    setMsgs(p => [...p, { role:"user", text: userText }]);
+    setMsgCount(c => c+1);
+    const reply = await askClaude(userText);
+    addAI(reply);
+  }, [askClaude, addAI]);
+
+  /* 음성 인식 */
+  const startListen = useCallback(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setErrMsg("Chrome 브라우저에서만 음성 인식이 가능해요."); return; }
+    synthRef.current?.cancel(); setSpeaking(false);
+    const r = new SR();
+    r.lang = "ko-KR"; r.continuous = false; r.interimResults = true;
+    recogRef.current = r;
+    let final = "";
+    r.onstart  = () => { setListening(true); setInterim(""); setErrMsg(""); };
+    r.onresult = (e) => {
+      let inter = "", fin = "";
+      for (const res of e.results) {
+        if (res.isFinal) fin += res[0].transcript;
+        else             inter += res[0].transcript;
+      }
+      if (fin) final = fin;
+      setInterim(inter || fin);
+    };
+    r.onend = async () => {
+      setListening(false); setInterim("");
+      if (!final.trim()) return;
+      const userText = final.trim();
+      setMsgs(p => [...p, { role:"user", text: userText }]);
+      setMoodDone(true);
+      setMsgCount(c => c+1);
+      const reply = await askClaude(userText);
+      addAI(reply);
+    };
+    r.onerror = (e) => {
+      setListening(false); setInterim("");
+      if (e.error !== "no-speech" && e.error !== "aborted")
+        setErrMsg("인식 오류가 발생했어요. 다시 눌러주세요.");
+    };
+    r.start();
+  }, [askClaude, addAI]);
+
+  const stopListen   = useCallback(() => { recogRef.current?.stop(); }, []);
+  const stopSpeaking = useCallback(() => { synthRef.current?.cancel(); setSpeaking(false); }, []);
+  const handleBack   = useCallback(() => {
+    synthRef.current?.cancel();
+    recogRef.current?.abort();
+    onBack();
+  }, [onBack]);
+
+  const handleMicPress = useCallback((e) => {
+    e.preventDefault();
+    if (listening) stopListen(); else startListen();
+  }, [listening, startListen, stopListen]);
+
+  /* 대화 횟수에 따른 따뜻한 안내 문구 */
+  const statusMsg = listening
+    ? "말씀하세요… (다시 누르면 멈춤)"
+    : speaking
+      ? "지혜가 말하는 중이에요 🔊"
+      : msgCount === 0
+        ? "마이크를 누르거나 기분을 선택해 보세요"
+        : "마이크를 눌러 계속 말씀해 주세요";
+
+  return (
+    <Shell bg="#FFF0F8">
+      {/* ── 헤더 ── */}
+      <div style={{
+        background:`linear-gradient(135deg,${ROSE},${ROSE2})`,
+        padding:"12px 16px 14px",
+        display:"flex", alignItems:"center", gap:10, flexShrink:0,
+      }}>
+        <button onClick={handleBack} style={{
+          background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",
+          width:34,height:34,color:"white",fontSize:18,cursor:"pointer",
+          display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0
+        }}>‹</button>
+
+        <div style={{flex:1,textAlign:"center"}}>
+          <div style={{position:"relative",display:"inline-block"}}>
+            {speaking && <div style={{
+              position:"absolute",inset:-8,borderRadius:"50%",
+              background:"radial-gradient(circle,rgba(255,255,255,0.35) 0%,transparent 70%)",
+              animation:"pr 1s ease-in-out infinite"
+            }}/>}
+            <div style={{
+              width:42,height:42,borderRadius:"50%",
+              background:"rgba(255,255,255,0.25)",
+              display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:22,position:"relative",zIndex:1
+            }}>🌸</div>
+          </div>
+          <div style={{color:"white",fontWeight:800,fontSize:13,marginTop:2}}>
+            지혜 · 마음 말벗
+          </div>
+          <div style={{
+            color:"rgba(255,255,255,0.8)",fontSize:10,marginTop:1,
+            background:"rgba(255,255,255,0.15)",borderRadius:10,
+            padding:"1px 8px",display:"inline-block"
+          }}>
+            {speaking ? "🔊 말하는 중…" : listening ? "🎤 듣는 중…" : "언제든 말씀해 주세요"}
+          </div>
+        </div>
+
+        <button onClick={stopSpeaking} style={{
+          background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",
+          width:34,height:34,color:"white",fontSize:14,cursor:"pointer",
+          display:"flex",alignItems:"center",justifyContent:"center"
+        }} title="말하기 중지">🔇</button>
+      </div>
+
+      {/* ── 채팅 영역 ── */}
+      <div ref={scrollRef} style={{
+        flex:1, overflowY:"auto",
+        padding:"12px 14px 8px",
+        display:"flex", flexDirection:"column", gap:10,
+        background:"linear-gradient(180deg,#FFF0F8 0%,#FFF5FB 100%)",
+      }}>
+
+        {/* ── 기분 선택 카드 (첫 화면) ── */}
+        {!moodDone && msgs.length === 1 && (
+          <div style={{
+            background:"white",borderRadius:18,
+            padding:"14px 14px 12px",
+            boxShadow:"0 4px 20px rgba(233,30,99,0.1)",
+            border:"1.5px solid #FCE4EC",
+            marginBottom:4,
+          }}>
+            <div style={{
+              fontSize:12,color:ROSE2,fontWeight:700,
+              textAlign:"center",marginBottom:10,
+            }}>지금 기분이 어떠세요? 눌러보세요 💗</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+              {MOODS.map(m => (
+                <button key={m.label} onClick={() => pickMood(m)} style={{
+                  background:m.bg,
+                  border:`1.5px solid ${m.color}40`,
+                  borderRadius:12,padding:"9px 6px",
+                  color:m.color,fontSize:13,fontWeight:700,
+                  cursor:"pointer",
+                  fontFamily:"'Noto Sans KR',sans-serif",
+                  transition:"transform 0.12s",
+                }}>{m.label}</button>
+              ))}
+            </div>
+
+            {/* 주제 선택 */}
+            <div style={{
+              marginTop:12,paddingTop:11,
+              borderTop:"1px solid #FCE4EC",
+            }}>
+              <div style={{fontSize:11,color:C.gray,textAlign:"center",marginBottom:8,fontWeight:600}}>
+                또는 이런 얘기 하고 싶으세요?
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center"}}>
+                {["자녀·가족 얘기","건강 걱정","옛날 생각","오늘 있었던 일","그냥 수다"].map(t => (
+                  <button key={t} onClick={() => pickTopic(t)} style={{
+                    background:"white",
+                    border:`1.5px solid ${ROSE}44`,
+                    borderRadius:20,padding:"5px 11px",
+                    color:ROSE2,fontSize:11,fontWeight:700,
+                    cursor:"pointer",
+                    fontFamily:"'Noto Sans KR',sans-serif",
+                  }}>{t}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 메시지 목록 ── */}
+        {msgs.map((msg, i) => (
+          <div key={i} style={{display:"flex",flexDirection:"column",alignItems:msg.role==="ai"?"flex-start":"flex-end"}}>
+            {msg.role === "ai" ? (
+              <div style={{display:"flex",alignItems:"flex-end",gap:7,maxWidth:"88%"}}>
+                <div style={{
+                  width:28,height:28,borderRadius:"50%",flexShrink:0,
+                  background:`linear-gradient(135deg,${ROSE},${ROSE2})`,
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,
+                  marginBottom:2,
+                }}>🌸</div>
+                <div>
+                  {i === 0 && <div style={{fontSize:10,color:C.gray,marginBottom:3,fontWeight:600}}>지혜</div>}
+                  <div style={{
+                    background:"white",
+                    borderRadius:"4px 16px 16px 16px",
+                    padding:"11px 14px",
+                    boxShadow:"0 3px 14px rgba(233,30,99,0.09)",
+                    border:"1.5px solid #FCE4EC",
+                    fontSize:14.5,color:C.dark,
+                    lineHeight:1.75,whiteSpace:"pre-wrap",fontWeight:500,
+                  }}>{msg.text}</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                background:`linear-gradient(135deg,${ROSE},${ROSE2})`,
+                borderRadius:"16px 16px 4px 16px",
+                padding:"11px 15px",maxWidth:"78%",
+                fontSize:14.5,color:"white",
+                lineHeight:1.7,fontWeight:500,
+                boxShadow:`0 4px 16px ${ROSE}44`,
+              }}>{msg.text}</div>
+            )}
+          </div>
+        ))}
+
+        {/* ── 로딩 점점점 ── */}
+        {loading && (
+          <div style={{display:"flex",alignItems:"flex-end",gap:7}}>
+            <div style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${ROSE},${ROSE2})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>🌸</div>
+            <div style={{
+              background:"white",borderRadius:"4px 16px 16px 16px",
+              padding:"12px 16px",
+              boxShadow:"0 3px 14px rgba(233,30,99,0.09)",
+              border:"1.5px solid #FCE4EC",
+              display:"flex",gap:5,alignItems:"center"
+            }}>
+              {[0,0.22,0.44].map((d,k)=>(
+                <div key={k} style={{width:7,height:7,borderRadius:"50%",background:ROSE,animation:`dot 1.1s ease-in-out ${d}s infinite`}}/>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {errMsg && (
+          <div style={{
+            background:"#FFF3F3",border:"1.5px solid #FFCDD2",
+            borderRadius:12,padding:"9px 14px",color:C.red,
+            fontSize:12.5,textAlign:"center",fontWeight:600,
+          }}>{errMsg}</div>
+        )}
+      </div>
+
+      {/* ── 실시간 자막 바 ── */}
+      {(listening && interim) && (
+        <div style={{
+          background:"rgba(233,30,99,0.07)",
+          borderTop:`1.5px solid rgba(233,30,99,0.18)`,
+          padding:"8px 18px",fontSize:13.5,color:ROSE2,
+          fontWeight:600,textAlign:"center",flexShrink:0,
+          animation:"fi 0.2s ease",
+        }}>
+          🎤 "{interim}…"
+        </div>
+      )}
+
+      {/* ── 하단 입력 바 ── */}
+      <div style={{
+        background:"white",
+        borderTop:"1px solid #F5E8EF",
+        padding:"16px 18px 26px",
+        display:"flex",flexDirection:"column",
+        alignItems:"center",gap:10,flexShrink:0,
+      }}>
+        {/* 마이크 버튼 */}
+        <div
+          onPointerDown={handleMicPress}
+          style={{
+            width: listening ? 80 : 70,
+            height: listening ? 80 : 70,
+            borderRadius:"50%",
+            background: listening
+              ? `linear-gradient(135deg,${C.red},${C.r2})`
+              : `linear-gradient(135deg,${ROSE},${ROSE2})`,
+            display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize: listening ? 34 : 30,
+            cursor:"pointer",userSelect:"none",
+            boxShadow: listening
+              ? `0 0 0 14px rgba(229,57,53,0.14),0 0 0 28px rgba(229,57,53,0.06),0 8px 28px rgba(229,57,53,0.5)`
+              : `0 0 0 12px rgba(233,30,99,0.1),0 8px 28px rgba(233,30,99,0.38)`,
+            animation: listening ? "micPulse 0.7s ease-in-out infinite" : "breatheMic 3s ease-in-out infinite",
+            transition:"all 0.2s cubic-bezier(0.34,1.56,0.64,1)",
+          }}
+        >
+          {listening ? "🔴" : "🎤"}
+        </div>
+
+        <div style={{fontSize:12,color:C.gray,fontWeight:600,textAlign:"center",lineHeight:1.5}}>
+          {statusMsg}
+        </div>
+
+        {/* 음소거 중지 + 대화 마치기 */}
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          {speaking && (
+            <button onClick={stopSpeaking} style={{
+              background:"#FFF3ED",border:`1.5px solid rgba(233,30,99,0.25)`,
+              borderRadius:20,padding:"5px 14px",
+              color:ROSE2,fontSize:12,fontWeight:700,cursor:"pointer",
+              fontFamily:"'Noto Sans KR',sans-serif",
+            }}>🔇 중지</button>
+          )}
+          <button onClick={handleBack} style={{
+            background:"transparent",border:"none",
+            color:C.gray,fontSize:12,cursor:"pointer",
+            padding:"3px 12px",fontFamily:"'Noto Sans KR',sans-serif",
+          }}>대화 마치기</button>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes dot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-8px)}}
+        @keyframes micPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+        @keyframes breatheMic{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+      `}</style>
+    </Shell>
+  );
+}
+
+/* ══════════════════════════════════════════════
    🏠 홈 화면
 ══════════════════════════════════════════════ */
 function HomeScreen({ onFlow }) {
   const cards = [
-    { id:"train", icon:"🚂", label:"기차표 예매", sub:"KTX·무궁화 예매해드려요", grad:`linear-gradient(135deg,${C.blue},${C.b2})` },
-    { id:"hosp",  icon:"🏥", label:"병원 예약",   sub:"가까운 병원 찾아 예약해드려요", grad:`linear-gradient(135deg,${C.purple},${C.pu2})` },
-    { id:"taxi",  icon:"🚕", label:"택시 호출",   sub:"바로 부르고 자동 결제", grad:`linear-gradient(135deg,${C.yellow},${C.y2})` },
-    { id:"aid",   icon:"🦯", label:"보조기기 지원", sub:"나라에서 90%까지 지원", grad:`linear-gradient(135deg,${C.teal},${C.t2})` },
+    { id:"train", icon:"🚂", label:"기차표 예매",  sub:"KTX·무궁화 예매해드려요",   grad:`linear-gradient(135deg,${C.blue},${C.b2})` },
+    { id:"hosp",  icon:"🏥", label:"병원 예약",    sub:"가까운 병원 찾아 예약해드려요", grad:`linear-gradient(135deg,${C.purple},${C.pu2})` },
+    { id:"taxi",  icon:"🚕", label:"택시 호출",    sub:"바로 부르고 자동 결제",      grad:`linear-gradient(135deg,${C.yellow},${C.y2})` },
+    { id:"aid",   icon:"🦯", label:"보조기기 지원", sub:"나라에서 90%까지 지원",      grad:`linear-gradient(135deg,${C.teal},${C.t2})` },
+    { id:"chat",  icon:"💬", label:"마음 말벗",    sub:"오늘 기분 · 감정 · 일상 대화", grad:`linear-gradient(135deg,#E91E63,#C2185B)` },
   ];
   return (
     <Shell>
@@ -795,24 +1090,36 @@ function HomeScreen({ onFlow }) {
         <div style={{textAlign:"center"}}>
           <Av size={64} pulse/>
           <div style={{color:"white",fontWeight:900,fontSize:16,marginTop:7}}>효도 AI · 지혜</div>
-          <div style={{color:"rgba(255,255,255,0.82)",fontSize:12,marginTop:3,background:"rgba(255,255,255,0.15)",borderRadius:20,padding:"3px 11px",display:"inline-block"}}>항상 곁에 있을게요 💛</div>
+          <div style={{color:"rgba(255,255,255,0.82)",fontSize:12,marginTop:3,background:"rgba(255,255,255,0.15)",borderRadius:20,padding:"3px 11px",display:"inline-block"}}>언제든 말씀해 주세요 🌸</div>
         </div>
         <button style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:34,height:34,color:"white",fontSize:17,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>🔍</button>
       </div>
 
-      <div style={{flex:1,padding:"22px 18px 0",overflow:"auto"}}>
-        <div style={{fontSize:28,fontWeight:900,color:C.dark,textAlign:"center",lineHeight:1.3,marginBottom:6}}>무엇을<br/>도와드릴까요?</div>
-        <div style={{fontSize:14,color:C.gray,marginBottom:22,textAlign:"center"}}>원하시는 것을 눌러주세요</div>
+      <div style={{flex:1,padding:"18px 18px 0",overflow:"auto"}}>
 
-        {/* Mic */}
-        <div onClick={()=>onFlow("train")} style={{width:160,height:160,borderRadius:"50%",background:`linear-gradient(135deg,${C.primary},${C.p2})`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",margin:"0 auto 24px",boxShadow:"0 0 0 14px rgba(255,107,53,0.1),0 0 0 28px rgba(255,107,53,0.05),0 12px 36px rgba(255,107,53,0.43)",animation:"breathe 2.8s ease-in-out infinite"}}>
-          <span style={{fontSize:64,lineHeight:1}}>🎤</span>
-          <span style={{color:"white",fontSize:16,fontWeight:800,marginTop:5}}>말하기</span>
+        {/* ── 마음 말벗 HERO ── */}
+        <div onClick={()=>onFlow("chat")} style={{
+          background:"linear-gradient(135deg,#E91E63,#C2185B)",
+          borderRadius:22,padding:"28px 0 24px",
+          display:"flex",flexDirection:"column",alignItems:"center",gap:14,
+          boxShadow:"0 8px 28px rgba(233,30,99,0.38)",
+          cursor:"pointer",marginBottom:18,
+          animation:"breathe 2.8s ease-in-out infinite",
+        }}>
+          <div style={{fontSize:22,fontWeight:900,color:"white",letterSpacing:"-0.5px"}}>마음 말벗</div>
+          <div style={{
+            width:90,height:90,borderRadius:"50%",
+            background:"rgba(255,255,255,0.2)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize:44,
+            boxShadow:"0 0 0 12px rgba(255,255,255,0.08)",
+          }}>🎤</div>
         </div>
 
-        {/* 4 shortcut cards */}
+        {/* ── 나머지 서비스 ── */}
+        <div style={{fontSize:13,color:C.gray,fontWeight:700,marginBottom:10}}>다른 도움이 필요하세요?</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {cards.map(card=>(
+          {cards.filter(c=>c.id!=="chat").map(card=>(
             <div key={card.id} onClick={()=>onFlow(card.id)} style={{background:"white",borderRadius:18,padding:"16px 14px",display:"flex",flexDirection:"column",gap:8,boxShadow:"0 4px 16px rgba(0,0,0,0.07)",border:"1.5px solid rgba(0,0,0,0.05)",cursor:"pointer",transition:"transform 0.15s"}}>
               <div style={{width:46,height:46,borderRadius:13,background:card.grad,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>
                 {card.icon}
@@ -865,6 +1172,12 @@ const FLOWS = {
     labels:["① 상담","② 설문","③ 촬영","④ OCR","⑤ 결과","⑥ 자녀","⑦ 완료"],
     grad:`linear-gradient(135deg,${C.teal},${C.t2})`,
   },
+  chat: {
+    label:"💬 마음 말벗",
+    screens:["talk"],
+    labels:["대화"],
+    grad:`linear-gradient(135deg,#E91E63,#C2185B)`,
+  },
 };
 
 export default function App() {
@@ -909,41 +1222,20 @@ export default function App() {
         {/* HOME */}
         {!flow && <HomeScreen onFlow={id=>{ setFlow(id); setStep(0); }}/>}
 
+        {/* 💬 마음 말벗 */}
+        {flow==="chat" && <HeartChat onBack={home}/>}
+
         {/* 🚂 기차 */}
         {flow==="train" && stepId==="listen"   && <ListenScreen phrase="얘야, 이번 주 일요일 부산 가는 기차표 하나 예매해줘" onDone={next}/>}
         {flow==="train" && stepId==="proc"     && <ProcScreen steps={["목소리 인식 완료","KTX 앱 실행 중...","좌석 검색 중...","결제 창 준비 중..."]} icons={["🎤","🚂","💺","💳"]} onDone={next} onBack={home}/>}
         {flow==="train" && stepId==="confirm"  && <TrainConfirm onApprove={next} onRetry={()=>setStep(0)} onBack={home}/>}
-        {flow==="train" && stepId==="child"    && (
-          <ChildScreen
-            push="어머님께서 KTX-산천 121 부산행 예매를 요청하셨습니다. (총 59,800원)"
-            rows={[
-              ["👴 요청자","김말자님"],
-              ["🚂 열차","KTX-산천 121"],
-              ["🕑 시간","서울 11:30 → 부산 14:15"],
-              ["💺 좌석","8호차 12C (창가)"],
-              ["💰 금액","59,800원"],
-              ["💳 카드","XXXX-1234"],
-            ]}
-            onApprove={next}
-            onReject={home}
-          />
-        )}
-        {flow==="train" && stepId==="done"     && (
-          <DoneScreen
-            title="예매가 완료되었습니다!"
-            sub={"따님께서 결제를 승인하셨습니다.\nKTX-산천 121 부산행 예매 내역을 문자로 보내드렸어요. 📱"}
-            cardTitle="🚂 KTX-산천 121 부산행"
-            cardSub="서울 11:30 → 부산 14:15 · 8호차 12C (창가) · 59,800원"
-            cardBadge="예매완료"
-            badgeColor="#E3F2FD"
-            onReset={home}
-          />
-        )}
+        {flow==="train" && stepId==="child"    && <ChildScreen push="어머님께서 KTX 부산행 예매를 요청하셨습니다. (총 25,000원)" rows={[["👴 요청자","홍길동 어머님"],["🚂 내용","KTX 부산행 11:30 편도"],["💰 금액","25,000원"],["💳 카드","XXXX-1234"]]} onApprove={next} onReject={home}/>}
+        {flow==="train" && stepId==="done"     && <DoneScreen title="예매가 완료되었습니다!" sub={"따님께서 결제를 승인하셨습니다.\n예매 내역을 문자로 보내드렸어요. 📱"} cardTitle="🚂 KTX 기차표" cardSub="서울 → 부산 · 일요일 11:30 · 예약번호: HYD-2026-00192" cardBadge="예매완료" badgeColor="#E3F2FD" onReset={home}/>}
 
         {/* 🏥 병원 */}
         {flow==="hosp" && stepId==="listen"   && <ListenScreen phrase="얘야, 무릎이 너무 아파. 근처 정형외과 예약 좀 해줘" onDone={next}/>}
         {flow==="hosp" && stepId==="proc"     && <ProcScreen steps={["목소리 인식 완료","근처 정형외과 검색 중...","예약 가능 시간 확인 중...","예약 확정 중..."]} icons={["🎤","🔍","📅","✅"]} onDone={next} onBack={home}/>}
-        {flow==="hosp" && stepId==="confirm"  && <HospReservation onApprove={() => next()} onBack={home}/>}
+        {flow==="hosp" && stepId==="confirm"  && <HospConfirm onApprove={next} onRetry={()=>setStep(0)} onBack={home}/>}
         {flow==="hosp" && stepId==="child"    && <ChildScreen push="어머님께서 정형외과 예약을 요청하셨습니다. 내일 10:30 (진료비 3,000원)" rows={[["👴 요청자","홍길동 어머님"],["🏥 병원","서울 정형외과의원"],["📅 일시","내일 오전 10:30"],["💰 진료비","3,000원 (본인부담)"]]} onApprove={next} onReject={home}/>}
         {flow==="hosp" && stepId==="done"     && <HospDone onReset={home}/>}
 
